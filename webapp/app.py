@@ -327,6 +327,41 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/api/admin/initialize', methods=['POST'])
+def initialize_admin():
+    """
+    Initialize admin users from environment variables
+    This is used for first-time setup on deployed environments
+    """
+    try:
+        # Get admin user IDs from environment
+        admin_user_ids = os.getenv('ADMIN_USER_IDS', '')
+        
+        if not admin_user_ids:
+            return jsonify({'error': 'No admin user IDs configured'}), 400
+        
+        # Parse admin IDs
+        admin_ids = [int(uid.strip()) for uid in admin_user_ids.split(',') if uid.strip()]
+        
+        if not admin_ids:
+            return jsonify({'error': 'Invalid admin user IDs format'}), 400
+        
+        # Add all configured admins
+        added_count = 0
+        for admin_id in admin_ids:
+            success = db.add_admin(admin_id)
+            if success:
+                added_count += 1
+        
+        return jsonify({
+            'message': f'Admin initialization complete',
+            'admins_added': added_count,
+            'admin_ids': admin_ids
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # Production configuration
     host = os.getenv('FLASK_HOST', '0.0.0.0')
