@@ -362,6 +362,20 @@ def initialize_admin():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def auto_initialize_admins():
+    """
+    Automatically initialize admin users from environment variables on startup
+    """
+    try:
+        admin_user_ids = os.getenv('ADMIN_USER_IDS', '')
+        if admin_user_ids:
+            admin_ids = [int(uid.strip()) for uid in admin_user_ids.split(',') if uid.strip()]
+            for admin_id in admin_ids:
+                db.add_admin(admin_id)
+            print(f"✅ Auto-initialized admins: {admin_ids}")
+    except Exception as e:
+        print(f"⚠️ Error auto-initializing admins: {e}")
+
 if __name__ == '__main__':
     # Production configuration
     host = os.getenv('FLASK_HOST', '0.0.0.0')
@@ -370,5 +384,8 @@ if __name__ == '__main__':
     
     # Initialize database on startup
     db.init_database()
+    
+    # Auto-initialize admins from environment variables
+    auto_initialize_admins()
     
     app.run(host=host, port=port, debug=debug)
