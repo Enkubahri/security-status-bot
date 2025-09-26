@@ -328,5 +328,12 @@ def health_check():
     })
 
 if __name__ == '__main__':
-    # For development only
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Production configuration
+    host = os.getenv('FLASK_HOST', '0.0.0.0')
+    port = int(os.getenv('FLASK_PORT', 5000))
+    debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    
+    # Initialize database on startup
+    db.init_database()
+    
+    app.run(host=host, port=port, debug=debug)
