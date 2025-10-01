@@ -4,6 +4,7 @@ import hmac
 import json
 import urllib.parse
 import asyncio
+import threading
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
@@ -199,39 +200,47 @@ def create_report():
         )
         
         if success:
-            # Send push notifications asynchronously
+            # Send push notifications asynchronously in a separate thread
             if notification_service:
-                try:
-                    # Create async task to send notifications
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    
-                    # Send to subscribers
-                    notification_result = loop.run_until_complete(
-                        notification_service.send_security_alert(
-                            location=location,
-                            status=status,
-                            recommended_action=recommended_action,
-                            reporter_name=user_name
-                        )
-                    )
-                    
-                    # Send to admins
-                    admin_result = loop.run_until_complete(
-                        notification_service.send_admin_alert(
-                            location=location,
-                            status=status,
-                            recommended_action=recommended_action,
-                            reporter_name=user_name,
-                            reporter_id=user_id
-                        )
-                    )
-                    
-                    loop.close()
-                    
-                    print(f"Notifications sent: {notification_result['success']} subscribers, {admin_result['success']} admins")
-                except Exception as e:
-                    print(f"Error sending notifications: {e}")
+                def send_notifications():
+                    """Send notifications in a separate thread with its own event loop"""
+                    try:
+                        # Create new event loop for this thread
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        
+                        try:
+                            # Send to subscribers
+                            notification_result = loop.run_until_complete(
+                                notification_service.send_security_alert(
+                                    location=location,
+                                    status=status,
+                                    recommended_action=recommended_action,
+                                    reporter_name=user_name
+                                )
+                            )
+                            
+                            # Send to admins
+                            admin_result = loop.run_until_complete(
+                                notification_service.send_admin_alert(
+                                    location=location,
+                                    status=status,
+                                    recommended_action=recommended_action,
+                                    reporter_name=user_name,
+                                    reporter_id=user_id
+                                )
+                            )
+                            
+                            print(f"Notifications sent: {notification_result['success']} subscribers, {admin_result['success']} admins")
+                        finally:
+                            loop.close()
+                    except Exception as e:
+                        print(f"Error sending notifications: {e}")
+                
+                # Start notification thread (non-blocking)
+                notification_thread = threading.Thread(target=send_notifications)
+                notification_thread.daemon = True
+                notification_thread.start()
             
             return jsonify({'message': 'Report created successfully'}), 201
         else:
