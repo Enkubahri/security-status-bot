@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import urllib.parse
+import asyncio
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
@@ -12,6 +13,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SecurityDatabase
+from notifications import NotificationService
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -25,6 +27,9 @@ db = SecurityDatabase(os.getenv('DATABASE_PATH', '../security_reports.db'))
 
 # Bot token for authentication
 BOT_TOKEN = os.getenv('BOT_TOKEN')
+
+# Initialize notification service
+notification_service = NotificationService(BOT_TOKEN, db) if BOT_TOKEN else None
 
 def validate_telegram_data(init_data):
     """
@@ -194,6 +199,40 @@ def create_report():
         )
         
         if success:
+            # Send push notifications asynchronously
+            if notification_service:
+                try:
+                    # Create async task to send notifications
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    # Send to subscribers
+                    notification_result = loop.run_until_complete(
+                        notification_service.send_security_alert(
+                            location=location,
+                            status=status,
+                            recommended_action=recommended_action,
+                            reporter_name=user_name
+                        )
+                    )
+                    
+                    # Send to admins
+                    admin_result = loop.run_until_complete(
+                        notification_service.send_admin_alert(
+                            location=location,
+                            status=status,
+                            recommended_action=recommended_action,
+                            reporter_name=user_name,
+                            reporter_id=user_id
+                        )
+                    )
+                    
+                    loop.close()
+                    
+                    print(f"Notifications sent: {notification_result['success']} subscribers, {admin_result['success']} admins")
+                except Exception as e:
+                    print(f"Error sending notifications: {e}")
+            
             return jsonify({'message': 'Report created successfully'}), 201
         else:
             return jsonify({'error': 'Failed to create report'}), 500

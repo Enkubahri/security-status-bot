@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 
 from database import SecurityDatabase
 from admin_handlers import AdminHandlers, ADD_FOCAL_ID, ADD_FOCAL_NAME, REMOVE_FOCAL_ID
+from notifications import NotificationService
 
 # Load environment variables
 load_dotenv()
@@ -45,6 +46,9 @@ class SecurityBot:
             if admin_id.strip().isdigit():
                 self.db.add_admin(int(admin_id.strip()))
         
+        # Initialize notification service
+        self.notification_service = NotificationService(self.token, self.db)
+        
         self.application = None
         self.user_data: Dict[int, Dict[str, Any]] = {}
         self.admin_handlers = AdminHandlers(self.db, self.user_data)
@@ -64,6 +68,8 @@ Use /app to open the modern web interface with better features!
 📊 /status - View recent security reports
 🔍 /location <area> - Get security status for specific location
 📝 /report - Submit a security report (focal people only)
+🔔 /subscribe - Subscribe to security alert notifications
+🔕 /unsubscribe - Unsubscribe from notifications
 👥 /addfocal - Add focal person (admins only)
 📋 /listfocal - List all focal people (admins only)
 ❌ /removefocal - Remove focal person (admins only)
@@ -284,6 +290,32 @@ The report has been added to the database and is now visible to all group member
                 confirmation,
                 parse_mode=ParseMode.MARKDOWN
             )
+            
+            # Send push notifications to subscribers and admins
+            try:
+                # Send to all subscribers
+                notification_result = await self.notification_service.send_security_alert(
+                    location=location,
+                    status=status,
+                    recommended_action=action,
+                    reporter_name=reporter_name
+                )
+                
+                # Send to admins
+                admin_result = await self.notification_service.send_admin_alert(
+                    location=location,
+                    status=status,
+                    recommended_action=action,
+                    reporter_name=reporter_name,
+                    reporter_id=user_id
+                )
+                
+                logger.info(
+                    f"Notifications sent: {notification_result['success']} subscribers, "
+                    f"{admin_result['success']} admins"
+                )
+            except Exception as e:
+                logger.error(f"Error sending notifications: {e}")
         else:
             await update.message.reply_text(
                 "❌ There was an error saving your report. Please try again later."
@@ -308,6 +340,73 @@ The report has been added to the database and is now visible to all group member
         )
         
         return ConversationHandler.END
+    
+    async def subscribe_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Subscribe to security alert notifications."""
+        user_id = update.effective_user.id
+        user = update.effective_user
+        user_name = user.full_name or user.username or f"User{user_id}"
+        
+        # Check if already subscribed
+        if self.db.is_subscriber(user_id):
+            await update.message.reply_text(
+                "✅ You are already subscribed to security alerts!\n\n"
+                "You will receive push notifications whenever a new security report is submitted.\n\n"
+                "Use /unsubscribe to stop receiving notifications."
+            )
+            return
+        
+        # Add subscriber to database
+        success = self.db.add_subscriber(user_id, user_name)
+        
+        if success:
+            # Send test notification
+            test_sent = await self.notification_service.send_test_notification(user_id)
+            
+            if test_sent:
+                await update.message.reply_text(
+                    "🔔 **Successfully subscribed to security alerts!**\n\n"
+                    "You will now receive push notifications whenever a new security report is submitted.\n\n"
+                    "✅ A test notification was sent to confirm your subscription.\n\n"
+                    "Use /unsubscribe anytime to stop receiving notifications."
+                )
+            else:
+                await update.message.reply_text(
+                    "🔔 **Successfully subscribed to security alerts!**\n\n"
+                    "You will now receive push notifications whenever a new security report is submitted.\n\n"
+                    "⚠️ Note: Please make sure you haven't blocked this bot.\n\n"
+                    "Use /unsubscribe anytime to stop receiving notifications."
+                )
+        else:
+            await update.message.reply_text(
+                "❌ There was an error processing your subscription. Please try again later."
+            )
+    
+    async def unsubscribe_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Unsubscribe from security alert notifications."""
+        user_id = update.effective_user.id
+        
+        # Check if subscribed
+        if not self.db.is_subscriber(user_id):
+            await update.message.reply_text(
+                "❌ You are not currently subscribed to security alerts.\n\n"
+                "Use /subscribe to start receiving notifications."
+            )
+            return
+        
+        # Remove subscriber from database
+        success = self.db.remove_subscriber(user_id)
+        
+        if success:
+            await update.message.reply_text(
+                "🔕 **Successfully unsubscribed from security alerts.**\n\n"
+                "You will no longer receive push notifications for new security reports.\n\n"
+                "Use /subscribe anytime to start receiving notifications again."
+            )
+        else:
+            await update.message.reply_text(
+                "❌ There was an error processing your unsubscription. Please try again later."
+            )
 
     def setup_handlers(self):
         """Set up all command and message handlers."""
@@ -317,6 +416,10 @@ The report has been added to the database and is now visible to all group member
         self.application.add_handler(CommandHandler("help", self.help_command))
         self.application.add_handler(CommandHandler("status", self.status_command))
         self.application.add_handler(CommandHandler("location", self.location_command))
+        
+        # Subscription commands
+        self.application.add_handler(CommandHandler("subscribe", self.subscribe_command))
+        self.application.add_handler(CommandHandler("unsubscribe", self.unsubscribe_command))
         
         # Security report conversation
         report_conv_handler = ConversationHandler(

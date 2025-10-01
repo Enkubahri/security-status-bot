@@ -48,6 +48,17 @@ class SecurityDatabase:
                 )
             ''')
             
+            # Create subscribers table for push notifications
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS subscribers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    telegram_user_id INTEGER UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    subscribed_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT 1
+                )
+            ''')
+            
             conn.commit()
     
     def add_security_report(self, location: str, status: str, recommended_action: str, 
@@ -171,3 +182,67 @@ class SecurityDatabase:
         except Exception as e:
             print(f"Error removing focal person: {e}")
             return False
+    
+    def add_subscriber(self, telegram_user_id: int, name: str) -> bool:
+        """Add a new subscriber for push notifications"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT OR REPLACE INTO subscribers 
+                    (telegram_user_id, name, is_active)
+                    VALUES (?, ?, 1)
+                ''', (telegram_user_id, name))
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error adding subscriber: {e}")
+            return False
+    
+    def remove_subscriber(self, telegram_user_id: int) -> bool:
+        """Remove a subscriber (deactivate)"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE subscribers 
+                    SET is_active = 0 
+                    WHERE telegram_user_id = ?
+                ''', (telegram_user_id,))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error removing subscriber: {e}")
+            return False
+    
+    def is_subscriber(self, telegram_user_id: int) -> bool:
+        """Check if a user is subscribed to notifications"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT 1 FROM subscribers 
+                WHERE telegram_user_id = ? AND is_active = 1
+            ''', (telegram_user_id,))
+            return cursor.fetchone() is not None
+    
+    def get_all_subscribers(self) -> List[Tuple]:
+        """Get all active subscribers"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT telegram_user_id, name 
+                FROM subscribers 
+                WHERE is_active = 1
+                ORDER BY subscribed_date DESC
+            ''')
+            return cursor.fetchall()
+    
+    def get_all_admins(self) -> List[int]:
+        """Get all admin user IDs"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT telegram_user_id 
+                FROM admins
+            ''')
+            return [row[0] for row in cursor.fetchall()]
