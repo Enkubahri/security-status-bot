@@ -52,13 +52,37 @@ class SecurityBot:
         self.application = None
         self.user_data: Dict[int, Dict[str, Any]] = {}
         self.admin_handlers = AdminHandlers(self.db, self.user_data)
+    
+    async def auto_subscribe_user(self, update: Update) -> bool:
+        """Automatically subscribe users when they first interact with the bot."""
+        user = update.effective_user
+        user_id = user.id
+        user_name = user.full_name or user.username or f"User{user_id}"
+        
+        # Check if already subscribed
+        if not self.db.is_subscriber(user_id):
+            # Auto-subscribe the user
+            success = self.db.add_subscriber(user_id, user_name)
+            if success:
+                logger.info(f"Auto-subscribed user {user_name} (ID: {user_id})")
+                return True
+            else:
+                logger.error(f"Failed to auto-subscribe user {user_name} (ID: {user_id})")
+                return False
+        return True  # Already subscribed
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Send a message when the command /start is issued."""
+        # Auto-subscribe the user
+        await self.auto_subscribe_user(update)
+        
         welcome_msg = """
 🛡️ **Security Status Bot**
 
 Welcome! This bot helps community members stay informed about security conditions in different areas.
+
+🔔 **You're now automatically subscribed to security alerts!**
+You'll receive instant notifications when security reports are submitted.
 
 **🚀 NEW: Mini App Available!**
 Use /app to open the modern web interface with better features!
@@ -68,7 +92,6 @@ Use /app to open the modern web interface with better features!
 📊 /status - View recent security reports
 🔍 /location <area> - Get security status for specific location
 📝 /report - Submit a security report (focal people only)
-🔔 /subscribe - Subscribe to security alert notifications
 🔕 /unsubscribe - Unsubscribe from notifications
 👥 /addfocal - Add focal person (admins only)
 📋 /listfocal - List all focal people (admins only)
@@ -126,6 +149,9 @@ Use the Mini App (/app) for enhanced interface, real-time updates, and better mo
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show recent security reports."""
+        # Auto-subscribe the user
+        await self.auto_subscribe_user(update)
+        
         reports = self.db.get_latest_reports(10)
         
         if not reports:
@@ -157,6 +183,9 @@ Use the Mini App (/app) for enhanced interface, real-time updates, and better mo
 
     async def location_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Show security reports for a specific location."""
+        # Auto-subscribe the user
+        await self.auto_subscribe_user(update)
+        
         if not context.args:
             await update.message.reply_text(
                 "Please specify a location. Usage: /location <area name>"
@@ -196,6 +225,9 @@ Use the Mini App (/app) for enhanced interface, real-time updates, and better mo
     # Security Report Conversation Handlers
     async def start_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Start the security report conversation."""
+        # Auto-subscribe the user
+        await self.auto_subscribe_user(update)
+        
         user_id = update.effective_user.id
         
         # Check if user is a focal person
@@ -342,7 +374,7 @@ The report has been added to the database and is now visible to all group member
         return ConversationHandler.END
     
     async def subscribe_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Subscribe to security alert notifications."""
+        """Subscribe to security alert notifications (now automatic, but kept for manual re-subscription)."""
         user_id = update.effective_user.id
         user = update.effective_user
         user_name = user.full_name or user.username or f"User{user_id}"
@@ -351,6 +383,7 @@ The report has been added to the database and is now visible to all group member
         if self.db.is_subscriber(user_id):
             await update.message.reply_text(
                 "✅ You are already subscribed to security alerts!\n\n"
+                "📱 All bot users are automatically subscribed to receive security notifications.\n\n"
                 "You will receive push notifications whenever a new security report is submitted.\n\n"
                 "Use /unsubscribe to stop receiving notifications."
             )

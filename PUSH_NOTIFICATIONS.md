@@ -11,11 +11,12 @@ The Security Status Bot now includes a comprehensive push notification system th
 - **Admin Notifications**: Administrators receive special notifications with additional report details
 - **Multi-Channel Support**: Notifications work for reports submitted via both the Telegram bot and the web app
 
-### 📱 User Subscription Management
-Users can easily manage their notification preferences:
-- `/subscribe` - Subscribe to security alert notifications
-- `/unsubscribe` - Unsubscribe from notifications
-- Automatic test notification sent upon subscription to verify delivery
+### 📱 Automatic Subscription
+**All users are automatically subscribed when they first interact with the bot!**
+- No manual subscription needed - just use any bot command
+- `/unsubscribe` - Opt out of notifications anytime
+- `/subscribe` - Re-subscribe if you previously unsubscribed
+- Seamless experience for all users
 
 ### 🔐 Security
 - Only authorized focal people can submit reports (which trigger notifications)
@@ -26,19 +27,22 @@ Users can easily manage their notification preferences:
 
 ### For Users
 
-1. **Subscribe to Notifications**
-   ```
-   /subscribe
-   ```
-   - You'll receive a test notification to confirm your subscription
-   - You'll get instant alerts whenever new security reports are submitted
+**🎉 Automatic Subscription - No Setup Required!**
 
-2. **Unsubscribe from Notifications**
-   ```
-   /unsubscribe
-   ```
-   - You'll stop receiving security alert notifications
-   - You can re-subscribe at any time
+When you first interact with the bot (send any command like `/start`, `/status`, `/location`, etc.), you're **automatically subscribed** to security alerts!
+
+**To Opt Out:**
+```
+/unsubscribe
+```
+- You'll stop receiving security alert notifications
+- You can re-subscribe anytime with `/subscribe`
+
+**To Re-Subscribe:**
+```
+/subscribe
+```
+- If you previously unsubscribed, use this to receive notifications again
 
 ### For Focal People (Report Submitters)
 
@@ -205,8 +209,9 @@ If you experience issues with notifications:
 
 | Command | Description | Who Can Use |
 |---------|-------------|-------------|
-| `/subscribe` | Subscribe to security alerts | All users |
-| `/unsubscribe` | Unsubscribe from alerts | All users |
+| _Any command_ | **Automatically subscribes** user to alerts | All users |
+| `/subscribe` | Re-subscribe if previously unsubscribed | All users |
+| `/unsubscribe` | Opt out of notifications | All users |
 | `/report` | Submit security report (triggers notifications) | Focal people only |
 
 ---
