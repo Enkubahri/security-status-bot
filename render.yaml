@@ -1,9 +1,10 @@
 services:
+  # Web App Service
   - type: web
     name: security-status-miniapp
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python webapp/app.py
+    startCommand: gunicorn --bind 0.0.0.0:10000 --workers 2 --timeout 120 webapp.app:app
     plan: free
     envVars:
       - key: FLASK_ENV
@@ -15,5 +16,24 @@ services:
       - key: FLASK_DEBUG
         value: false
       - key: DATABASE_PATH
-        value: /tmp/security_reports.db
+        value: /opt/render/project/src/security_reports.db
+      - key: BOT_TOKEN
+        sync: false  # Add this as a secret in Render dashboard
+      - key: ADMIN_USER_IDS
+        value: 994550828
     healthCheckPath: /health
+  
+  # Telegram Bot Service
+  - type: worker
+    name: security-status-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    plan: free
+    envVars:
+      - key: BOT_TOKEN
+        sync: false  # Add this as a secret in Render dashboard
+      - key: ADMIN_USER_IDS
+        value: 994550828
+      - key: DATABASE_PATH
+        value: /opt/render/project/src/security_reports.db
